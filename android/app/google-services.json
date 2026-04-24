@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "190090927029",
+    "project_id": "flutter-businessapp",
+    "storage_bucket": "flutter-businessapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:190090927029:android:0142178b082ff2ddab17fc",
+        "android_client_info": {
+          "package_name": "businessapp.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBs-9WpAigK9ogJcCJVSp9ON7inQLy2eCo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:190090927029:android:f2c50038f1675a60ab17fc",
+        "android_client_info": {
+          "package_name": "businessapp.flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBs-9WpAigK9ogJcCJVSp9ON7inQLy2eCo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:190090927029:android:b2e75594d7622209ab17fc",
+        "android_client_info": {
+          "package_name": "com.example.flutter_paracodecode_businessapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBs-9WpAigK9ogJcCJVSp9ON7inQLy2eCo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
