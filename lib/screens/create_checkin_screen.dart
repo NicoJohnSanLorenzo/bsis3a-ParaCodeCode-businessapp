@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:convert';
 
 class CreateCheckinScreen extends StatefulWidget {
   const CreateCheckinScreen({super.key});
@@ -23,11 +23,10 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
 
   double? _lat;
   double? _lng;
-  String? _photoUrl;
-  File? _imageFile;
+  XFile? _selectedImage;
   bool _isLoading = false;
   bool _isFetchingLocation = false;
-  bool _isUploadingPhoto = false;
+  bool _isPickingPhoto = false;
 
   @override
   void dispose() {
@@ -76,28 +75,16 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
     }
   }
 
-  Future<void> _pickAndUploadPhoto() async {
+  Future<void> _pickPhoto() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 75);
     if (picked == null) return;
 
     setState(() {
-      _imageFile = File(picked.path);
-      _isUploadingPhoto = true;
+      _selectedImage = picked;
+      _isPickingPhoto = false;
     });
-
-    try {
-      final fileName = 'checkins/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final ref = FirebaseStorage.instance.ref().child(fileName);
-      await ref.putFile(_imageFile!);
-      final url = await ref.getDownloadURL();
-      setState(() => _photoUrl = url);
-      _showSnack('Photo uploaded!');
-    } catch (e) {
-      _showSnack('Photo upload failed: $e');
-    } finally {
-      setState(() => _isUploadingPhoto = false);
-    }
+    _showSnack('Photo selected!');
   }
 
   Future<void> _submit() async {
@@ -105,17 +92,25 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await FirebaseFirestore.instance.collection('checkin_logs').add({
+      final bytes = await _selectedImage!.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      final docRef = FirebaseFirestore.instance.collection('checkin_logs').doc();
+      final docId = docRef.id;
+
+      await docRef.set({
+        'id': docId,
         'businessName': _businessNameController.text.trim(),
         'note': _noteController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
-        'photoUrl': _photoUrl ?? '',
+        'photoBase64': base64Image,
         'lat': _lat,
         'lng': _lng,
         'createdBy': _createdByController.text.trim(),
         'stockIssue': _stockIssueController.text.trim(),
         'supplierName': _supplierNameController.text.trim(),
       });
+
       _showSnack('Check-in log saved!');
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -230,22 +225,25 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
                       style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
                     ),
                     const SizedBox(height: 8),
-                    if (_imageFile != null)
+                    if (_selectedImage != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(_imageFile!, height: 160, width: double.infinity, fit: BoxFit.cover),
+                        child: Image.file(
+                          File(_selectedImage!.path),
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                    if (_photoUrl != null && _imageFile == null)
-                      Text('Uploaded: $_photoUrl', style: const TextStyle(fontSize: 12, color: Colors.green)),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: _isUploadingPhoto ? null : _pickAndUploadPhoto,
-                        icon: _isUploadingPhoto
+                        onPressed: _isPickingPhoto ? null : _pickPhoto,
+                        icon: _isPickingPhoto
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.camera_alt_outlined),
-                        label: Text(_isUploadingPhoto ? 'Uploading...' : 'Take / Upload Photo'),
+                        label: Text(_isPickingPhoto ? 'Opening camera...' : 'Take / Upload Photo'),
                       ),
                     ),
                   ],
