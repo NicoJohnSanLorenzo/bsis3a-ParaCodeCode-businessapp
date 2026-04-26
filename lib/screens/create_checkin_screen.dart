@@ -12,7 +12,8 @@ class CreateCheckinScreen extends StatefulWidget {
   State<CreateCheckinScreen> createState() => _CreateCheckinScreenState();
 }
 
-class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
+class _CreateCheckinScreenState extends State<CreateCheckinScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
   final _businessNameController = TextEditingController();
@@ -27,6 +28,28 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
   bool _isLoading = false;
   bool _isFetchingLocation = false;
   bool _isPickingPhoto = false;
+  bool _showSuccess = false;
+
+  late AnimationController _successAnimController;
+  late Animation<double> _successScaleAnim;
+  late Animation<double> _successFadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _successAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _successScaleAnim = CurvedAnimation(
+      parent: _successAnimController,
+      curve: Curves.elasticOut,
+    );
+    _successFadeAnim = CurvedAnimation(
+      parent: _successAnimController,
+      curve: Curves.easeIn,
+    );
+  }
 
   @override
   void dispose() {
@@ -35,6 +58,7 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
     _createdByController.dispose();
     _stockIssueController.dispose();
     _supplierNameController.dispose();
+    _successAnimController.dispose();
     super.dispose();
   }
 
@@ -111,12 +135,17 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
         'supplierName': _supplierNameController.text.trim(),
       });
 
-      _showSnack('Check-in log saved!');
+      // Trigger success animation, then navigate back
+      setState(() {
+        _isLoading = false;
+        _showSuccess = true;
+      });
+      _successAnimController.forward();
+      await Future.delayed(const Duration(milliseconds: 1400));
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      _showSnack('Failed to save: $e');
-    } finally {
       setState(() => _isLoading = false);
+      _showSnack('Failed to save: $e');
     }
   }
 
@@ -126,148 +155,211 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Check-In Log'),
-        backgroundColor: const Color(0xFF1B1B4E),
-        foregroundColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildField(
-                controller: _businessNameController,
-                label: 'Business Name',
-                icon: Icons.business,
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildField(
-                controller: _noteController,
-                label: 'Note',
-                icon: Icons.notes,
-                maxLines: 3,
-              ),
-              const SizedBox(height: 14),
-              _buildField(
-                controller: _createdByController,
-                label: 'Created By (name / nickname / device)',
-                icon: Icons.person,
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildField(
-                controller: _stockIssueController,
-                label: 'Stock Issue',
-                icon: Icons.warning_amber_outlined,
-              ),
-              const SizedBox(height: 14),
-              _buildField(
-                controller: _supplierNameController,
-                label: 'Supplier Name',
-                icon: Icons.local_shipping_outlined,
-              ),
-              const SizedBox(height: 20),
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: const Text('Create Check-In Log'),
+            backgroundColor: const Color(0xFF1B1B4E),
+            foregroundColor: Colors.white,
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildField(
+                    controller: _businessNameController,
+                    label: 'Business Name',
+                    icon: Icons.business,
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildField(
+                    controller: _noteController,
+                    label: 'Note',
+                    icon: Icons.notes,
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildField(
+                    controller: _createdByController,
+                    label: 'Created By (name / nickname / device)',
+                    icon: Icons.person,
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildField(
+                    controller: _stockIssueController,
+                    label: 'Stock Issue',
+                    icon: Icons.warning_amber_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildField(
+                    controller: _supplierNameController,
+                    label: 'Supplier Name',
+                    icon: Icons.local_shipping_outlined,
+                  ),
+                  const SizedBox(height: 20),
 
-              // GPS Section
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'GPS Location',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
+                  // GPS Section
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _lat != null && _lng != null
-                          ? 'Lat: ${_lat!.toStringAsFixed(6)},  Lng: ${_lng!.toStringAsFixed(6)}'
-                          : 'Not yet fetched',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _isFetchingLocation ? null : _fetchLocation,
-                        icon: _isFetchingLocation
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.my_location),
-                        label: Text(_isFetchingLocation ? 'Fetching...' : 'Get Location'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Photo Section
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Photo',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    if (_selectedImage != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(_selectedImage!.path),
-                          height: 160,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'GPS Location',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
                         ),
-                      ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _isPickingPhoto ? null : _pickPhoto,
-                        icon: _isPickingPhoto
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.camera_alt_outlined),
-                        label: Text(_isPickingPhoto ? 'Opening camera...' : 'Take / Upload Photo'),
-                      ),
+                        const SizedBox(height: 6),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 400),
+                          child: Text(
+                            _lat != null && _lng != null
+                                ? 'Lat: ${_lat!.toStringAsFixed(6)},  Lng: ${_lng!.toStringAsFixed(6)}'
+                                : 'Not yet fetched',
+                            key: ValueKey(_lat),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isFetchingLocation ? null : _fetchLocation,
+                            icon: _isFetchingLocation
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.my_location),
+                            label: Text(_isFetchingLocation ? 'Fetching...' : 'Get Location'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+                  ),
+                  const SizedBox(height: 14),
 
-              ElevatedButton(
-                onPressed: _isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B1B4E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Save Check-In Log', style: TextStyle(fontSize: 16)),
+                  // Photo Section
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Photo',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 400),
+                          transitionBuilder: (child, anim) =>
+                              FadeTransition(opacity: anim, child: child),
+                          child: _selectedImage != null
+                              ? ClipRRect(
+                                  key: ValueKey(_selectedImage!.path),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(
+                                    File(_selectedImage!.path),
+                                    height: 160,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : const SizedBox.shrink(key: ValueKey('no_image')),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isPickingPhoto ? null : _pickPhoto,
+                            icon: _isPickingPhoto
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.camera_alt_outlined),
+                            label: Text(_isPickingPhoto ? 'Opening camera...' : 'Take / Upload Photo'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B1B4E),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _isLoading
+                          ? const SizedBox(
+                              key: ValueKey('loading'),
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                            )
+                          : const Text(
+                              key: ValueKey('label'),
+                              'Save Check-In Log',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
         ),
-      ),
+
+        // ── Full-screen success overlay ──
+        if (_showSuccess)
+          FadeTransition(
+            opacity: _successFadeAnim,
+            child: Container(
+              color: Colors.black54,
+              alignment: Alignment.center,
+              child: ScaleTransition(
+                scale: _successScaleAnim,
+                child: Container(
+                  width: 180,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: Color(0xFF1B1B4E), size: 72),
+                      SizedBox(height: 12),
+                      Text(
+                        'Saved!',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B1B4E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
