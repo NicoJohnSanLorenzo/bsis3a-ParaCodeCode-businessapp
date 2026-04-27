@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import './create_checkin_screen.dart';
 
 class LogListScreen extends StatelessWidget {
   const LogListScreen({super.key});
@@ -8,9 +9,21 @@ class LogListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Log List'),
+        title: const Text('Inventory'),
         backgroundColor: const Color(0xFF1B1B4E),
         foregroundColor: Colors.white,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreateCheckinScreen()),
+          );
+        },
+        backgroundColor: const Color(0xFF1B1B4E),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Product Order'),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -30,47 +43,147 @@ class LogListScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
+                  Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
                   SizedBox(height: 12),
-                  Text('No check-in logs yet.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                  Text('No inventory orders yet.', style: TextStyle(color: Colors.grey, fontSize: 16)),
                 ],
               ),
             );
           }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data() as Map<String, dynamic>;
-              final ts = data['createdAt'] as Timestamp?;
-              final dateStr = ts != null
-                  ? '${ts.toDate().toLocal()}'.split('.')[0]
-                  : 'No date';
 
-              return _AnimatedLogCard(
-                key: ValueKey(doc.id),
-                docId: doc.id,
-                data: data,
-                dateStr: dateStr,
-              );
-            },
+          final inStock = docs.where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return (data['stockStatus'] ?? '') == 'In-stock';
+          }).toList();
+
+          final lowStock = docs.where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return (data['stockStatus'] ?? '') == 'Low stock';
+          }).toList();
+
+          final outOfStock = docs.where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return (data['stockStatus'] ?? '') == 'Out-of-stock';
+          }).toList();
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            children: [
+              if (inStock.isNotEmpty) ...[
+                _CategoryHeader(
+                  label: 'In-stock',
+                  count: inStock.length,
+                  color: Colors.green,
+                  icon: Icons.check_circle_outline,
+                ),
+                const SizedBox(height: 8),
+                ...inStock.map((doc) => _buildCard(doc)),
+                const SizedBox(height: 20),
+              ],
+              if (lowStock.isNotEmpty) ...[
+                _CategoryHeader(
+                  label: 'Low Stock',
+                  count: lowStock.length,
+                  color: Colors.orange,
+                  icon: Icons.warning_amber_outlined,
+                ),
+                const SizedBox(height: 8),
+                ...lowStock.map((doc) => _buildCard(doc)),
+                const SizedBox(height: 20),
+              ],
+              if (outOfStock.isNotEmpty) ...[
+                _CategoryHeader(
+                  label: 'Out-of-stock',
+                  count: outOfStock.length,
+                  color: Colors.redAccent,
+                  icon: Icons.cancel_outlined,
+                ),
+                const SizedBox(height: 8),
+                ...outOfStock.map((doc) => _buildCard(doc)),
+              ],
+            ],
           );
         },
       ),
     );
   }
+
+  Widget _buildCard(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final ts = data['createdAt'] as Timestamp?;
+    final dateStr = ts != null ? '${ts.toDate().toLocal()}'.split('.')[0] : 'No date';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _AnimatedInventoryCard(
+        key: ValueKey(doc.id),
+        docId: doc.id,
+        data: data,
+        dateStr: dateStr,
+      ),
+    );
+  }
 }
 
-// ── Animated card wrapper ──────────────────────────────────────────────────────
+class _CategoryHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
 
-class _AnimatedLogCard extends StatefulWidget {
+  const _CategoryHeader({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: color,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Animated card ──────────────────────────────────────────────────────────────
+
+class _AnimatedInventoryCard extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> data;
   final String dateStr;
 
-  const _AnimatedLogCard({
+  const _AnimatedInventoryCard({
     super.key,
     required this.docId,
     required this.data,
@@ -78,10 +191,10 @@ class _AnimatedLogCard extends StatefulWidget {
   });
 
   @override
-  State<_AnimatedLogCard> createState() => _AnimatedLogCardState();
+  State<_AnimatedInventoryCard> createState() => _AnimatedInventoryCardState();
 }
 
-class _AnimatedLogCardState extends State<_AnimatedLogCard>
+class _AnimatedInventoryCardState extends State<_AnimatedInventoryCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<Offset> _slideAnim;
@@ -144,8 +257,8 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Log'),
-        content: Text('Are you sure you want to delete "${widget.data['businessName'] ?? 'this log'}"?'),
+        title: const Text('Delete Order'),
+        content: Text('Are you sure you want to delete "${widget.data['productName'] ?? 'this order'}"?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
@@ -154,7 +267,7 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
               await _animateThenDelete();
               if (mounted) {
                 _showSnack(
-                  '"${widget.data['businessName'] ?? 'Log'}" deleted.',
+                  '"${widget.data['productName'] ?? 'Order'}" deleted.',
                   isError: true,
                 );
               }
@@ -171,29 +284,38 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
   }
 
   void _showEditDialog() {
-    final businessCtrl = TextEditingController(text: widget.data['businessName'] ?? '');
+    final productCtrl = TextEditingController(text: widget.data['productName'] ?? '');
     final noteCtrl = TextEditingController(text: widget.data['note'] ?? '');
     final createdByCtrl = TextEditingController(text: widget.data['createdBy'] ?? '');
-    final stockCtrl = TextEditingController(text: widget.data['stockIssue'] ?? '');
     final supplierCtrl = TextEditingController(text: widget.data['supplierName'] ?? '');
+    String? selectedStatus = widget.data['stockStatus'];
+    final List<String> statusOptions = ['In-stock', 'Low stock', 'Out-of-stock'];
     bool isSaving = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Edit Log'),
+          title: const Text('Edit Inventory Order'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _editField(businessCtrl, 'Business Name'),
+                _editField(productCtrl, 'Product Name'),
                 const SizedBox(height: 10),
                 _editField(noteCtrl, 'Note', maxLines: 3),
                 const SizedBox(height: 10),
                 _editField(createdByCtrl, 'Created By'),
                 const SizedBox(height: 10),
-                _editField(stockCtrl, 'Stock Issue'),
+                DropdownButtonFormField<String>(
+                  value: selectedStatus,
+                  decoration: InputDecoration(
+                    labelText: 'Stock Status',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  items: statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (val) => setDialogState(() => selectedStatus = val),
+                ),
                 const SizedBox(height: 10),
                 _editField(supplierCtrl, 'Supplier Name'),
               ],
@@ -214,14 +336,14 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
                             .collection('checkin_logs')
                             .doc(widget.docId)
                             .update({
-                          'businessName': businessCtrl.text.trim(),
+                          'productName': productCtrl.text.trim(),
                           'note': noteCtrl.text.trim(),
                           'createdBy': createdByCtrl.text.trim(),
-                          'stockIssue': stockCtrl.text.trim(),
+                          'stockStatus': selectedStatus ?? 'In-stock',
                           'supplierName': supplierCtrl.text.trim(),
                         });
                         if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) _showSnack('Log updated successfully!', isSuccess: true);
+                        if (mounted) _showSnack('Order updated successfully!', isSuccess: true);
                       } catch (e) {
                         setDialogState(() => isSaving = false);
                         if (mounted) _showSnack('Failed to update: $e', isError: true);
@@ -250,27 +372,39 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
   }
 
   void _showDetailDialog() {
+    final status = widget.data['stockStatus'] ?? '';
+    final statusColor = status == 'In-stock'
+        ? Colors.green
+        : status == 'Low stock'
+            ? Colors.orange
+            : Colors.redAccent;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(widget.data['businessName'] ?? 'Log Details'),
+        title: Text(widget.data['productName'] ?? 'Order Details'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if ((widget.data['photoUrl'] ?? '').toString().isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(widget.data['photoUrl'], fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox()),
+              if (status.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: statusColor.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                const SizedBox(height: 10),
-              ],
               _detailRow('Note', widget.data['note']),
               _detailRow('Created By', widget.data['createdBy']),
               _detailRow('Supplier', widget.data['supplierName']),
-              _detailRow('Stock Issue', widget.data['stockIssue']),
               _detailRow('Created At', widget.dateStr),
               if (widget.data['lat'] != null && widget.data['lng'] != null)
                 _detailRow('GPS', 'Lat: ${widget.data['lat']},  Lng: ${widget.data['lng']}'),
@@ -311,8 +445,24 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
     );
   }
 
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'In-stock':
+        return Colors.green;
+      case 'Low stock':
+        return Colors.orange;
+      case 'Out-of-stock':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final status = widget.data['stockStatus'] ?? '';
+    final statusColor = _statusColor(status);
+
     return SlideTransition(
       position: _slideAnim,
       child: FadeTransition(
@@ -322,42 +472,44 @@ class _AnimatedLogCardState extends State<_AnimatedLogCard>
           elevation: 2,
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            leading: widget.data['photoUrl'] != null &&
-                    widget.data['photoUrl'].toString().isNotEmpty
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      widget.data['photoUrl'],
-                      width: 52,
-                      height: 52,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.image_not_supported, size: 40),
-                    ),
-                  )
-                : Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1B1B4E).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.store, color: Color(0xFF1B1B4E)),
-                  ),
+            leading: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B1B4E).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF1B1B4E)),
+            ),
             title: Text(
-              widget.data['businessName'] ?? 'Unnamed',
+              widget.data['productName'] ?? 'Unnamed',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
+                if (status.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: statusColor.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
                 if ((widget.data['supplierName'] ?? '').toString().isNotEmpty)
                   Text('Supplier: ${widget.data['supplierName']}',
                       style: const TextStyle(fontSize: 12)),
-                if ((widget.data['stockIssue'] ?? '').toString().isNotEmpty)
-                  Text('Stock Issue: ${widget.data['stockIssue']}',
-                      style: const TextStyle(fontSize: 12, color: Colors.orange)),
                 Text(
                   'By: ${widget.data['createdBy'] ?? '—'}   •   ${widget.dateStr}',
                   style: const TextStyle(fontSize: 11, color: Colors.grey),

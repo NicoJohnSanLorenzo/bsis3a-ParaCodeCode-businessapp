@@ -16,11 +16,13 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
-  final _businessNameController = TextEditingController();
+  final _productNameController = TextEditingController();
   final _noteController = TextEditingController();
   final _createdByController = TextEditingController();
-  final _stockIssueController = TextEditingController();
   final _supplierNameController = TextEditingController();
+
+  String? _stockStatus;
+  final List<String> _stockStatusOptions = ['In-stock', 'Low stock', 'Out-of-stock'];
 
   double? _lat;
   double? _lng;
@@ -53,10 +55,9 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
 
   @override
   void dispose() {
-    _businessNameController.dispose();
+    _productNameController.dispose();
     _noteController.dispose();
     _createdByController.dispose();
-    _stockIssueController.dispose();
     _supplierNameController.dispose();
     _successAnimController.dispose();
     super.dispose();
@@ -124,18 +125,17 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
 
       await docRef.set({
         'id': docId,
-        'businessName': _businessNameController.text.trim(),
+        'productName': _productNameController.text.trim(),
         'note': _noteController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'photoBase64': base64Image,
         'lat': _lat,
         'lng': _lng,
         'createdBy': _createdByController.text.trim(),
-        'stockIssue': _stockIssueController.text.trim(),
+        'stockStatus': _stockStatus ?? 'In-stock',
         'supplierName': _supplierNameController.text.trim(),
       });
 
-      // Trigger success animation, then navigate back
       setState(() {
         _isLoading = false;
         _showSuccess = true;
@@ -159,7 +159,7 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
       children: [
         Scaffold(
           appBar: AppBar(
-            title: const Text('Create Check-In Log'),
+            title: const Text('Add Inventory Order'),
             backgroundColor: const Color(0xFF1B1B4E),
             foregroundColor: Colors.white,
           ),
@@ -171,9 +171,9 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildField(
-                    controller: _businessNameController,
-                    label: 'Business Name',
-                    icon: Icons.business,
+                    controller: _productNameController,
+                    label: 'Product Name',
+                    icon: Icons.inventory_2_outlined,
                     validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 14),
@@ -191,11 +191,40 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
                     validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 14),
-                  _buildField(
-                    controller: _stockIssueController,
-                    label: 'Stock Issue',
-                    icon: Icons.warning_amber_outlined,
+
+                  // Stock Status Dropdown
+                  DropdownButtonFormField<String>(
+                    value: _stockStatus,
+                    decoration: InputDecoration(
+                      labelText: 'Stock Status',
+                      prefixIcon: const Icon(Icons.bar_chart, color: Color(0xFF1B1B4E)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF1B1B4E), width: 2),
+                      ),
+                    ),
+                    hint: const Text('Select Stock Status'),
+                    items: _stockStatusOptions.map((status) {
+                      return DropdownMenuItem<String>(
+                        value: status,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _stockStatusIcon(status),
+                              size: 18,
+                              color: _stockStatusColor(status),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(status),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) => setState(() => _stockStatus = val),
+                    validator: (v) => v == null ? 'Please select a stock status' : null,
                   ),
+
                   const SizedBox(height: 14),
                   _buildField(
                     controller: _supplierNameController,
@@ -312,7 +341,7 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
                             )
                           : const Text(
                               key: ValueKey('label'),
-                              'Save Check-In Log',
+                              'Save Inventory Order',
                               style: TextStyle(fontSize: 16),
                             ),
                     ),
@@ -324,7 +353,7 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
           ),
         ),
 
-        // ── Full-screen success overlay ──
+        // Full-screen success overlay
         if (_showSuccess)
           FadeTransition(
             opacity: _successFadeAnim,
@@ -361,6 +390,32 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
           ),
       ],
     );
+  }
+
+  IconData _stockStatusIcon(String status) {
+    switch (status) {
+      case 'In-stock':
+        return Icons.check_circle_outline;
+      case 'Low stock':
+        return Icons.warning_amber_outlined;
+      case 'Out-of-stock':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Color _stockStatusColor(String status) {
+    switch (status) {
+      case 'In-stock':
+        return Colors.green;
+      case 'Low stock':
+        return Colors.orange;
+      case 'Out-of-stock':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildField({
