@@ -1,4 +1,4 @@
-# 📱 ParaCodeCode Business App
+# 📱 ParaCodeCode Business App: "MARKIFY"
 
 A comprehensive Flutter-based business management application for inventory tracking, customer order management, and sales monitoring with real-time Firebase integration.
 
