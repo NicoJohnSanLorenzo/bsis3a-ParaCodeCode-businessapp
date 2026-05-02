@@ -240,7 +240,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// Inventory Card - matching customer screen design
+// Inventory Card - matching customer screen design with Proof Label
 class _InventoryCard extends StatelessWidget {
   final QueryDocumentSnapshot doc;
   final Color statusColor;
@@ -261,6 +261,9 @@ class _InventoryCard extends StatelessWidget {
     final data = doc.data() as Map<String, dynamic>;
     final dateStr = _formatDate(data['createdAt']);
     final status = data['stockStatus'] ?? 'Unknown';
+    final proofLabel = data['proofLabel'] ?? '';
+    final groupName = data['groupName'] ?? '';
+    final businessType = data['businessType'] ?? '';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -321,6 +324,44 @@ class _InventoryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
+            
+            // Proof Label Section (NEW - prominently displayed)
+            if (proofLabel.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.pastelBlue.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.deepBlue.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.verified_outlined, size: 14, color: AppColors.deepBlue),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Proof: ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.deepBlue,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        proofLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.deepBlue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            
             // Info rows
             _buildInfoRow(Icons.local_shipping_outlined, 'Supplier: ${data['supplierName'] ?? 'Not specified'}'),
             _buildInfoRow(Icons.person_outline, 'Created by: ${data['createdBy'] ?? 'Unknown'}'),

@@ -4,7 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
-// Your color palette - matching other screens
+// Your color palette
 class AppColors {
   static const pastelBlue     = Color(0xFFAEC6E8);
   static const pastelOrange   = Color(0xFFFFCBA4);
@@ -46,6 +46,10 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
   final _noteController = TextEditingController();
   final _createdByController = TextEditingController();
   final _supplierNameController = TextEditingController();
+  
+  // New controllers for the proof label feature
+  final _groupNameController = TextEditingController();
+  final _businessTypeController = TextEditingController();
 
   String? _stockStatus;
   final List<String> _stockStatusOptions = ['In-stock', 'Low stock', 'Out-of-stock'];
@@ -57,6 +61,7 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
   bool _isFetchingLocation = false;
   bool _isPickingPhoto = false;
   bool _showSuccess = false;
+  String _proofLabel = '';
 
   late AnimationController _successAnimController;
   late Animation<double> _successScaleAnim;
@@ -77,6 +82,10 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
       parent: _successAnimController,
       curve: Curves.easeIn,
     );
+    
+    // Add listeners to update proof label when group name or business type changes
+    _groupNameController.addListener(_updateProofLabel);
+    _businessTypeController.addListener(_updateProofLabel);
   }
 
   @override
@@ -85,8 +94,28 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
     _noteController.dispose();
     _createdByController.dispose();
     _supplierNameController.dispose();
+    _groupNameController.dispose();
+    _businessTypeController.dispose();
     _successAnimController.dispose();
     super.dispose();
+  }
+
+  void _updateProofLabel() {
+    final groupName = _groupNameController.text.trim();
+    final businessType = _businessTypeController.text.trim();
+    
+    if (groupName.isNotEmpty && businessType.isNotEmpty) {
+      final now = DateTime.now();
+      final month = now.month.toString().padLeft(2, '0');
+      final day = now.day.toString().padLeft(2, '0');
+      setState(() {
+        _proofLabel = '$groupName-$businessType-$month$day';
+      });
+    } else {
+      setState(() {
+        _proofLabel = '';
+      });
+    }
   }
 
   Future<void> _fetchLocation() async {
@@ -198,16 +227,24 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    if (_proofLabel.isEmpty) {
+      _showSnack('Please enter Group Name and Business Type to generate Proof Label');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
       final Map<String, dynamic> data = {
+        'proofLabel': _proofLabel,
         'productName': _productNameController.text.trim(),
         'note': _noteController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': _createdByController.text.trim(),
         'stockStatus': _stockStatus ?? 'In-stock',
         'supplierName': _supplierNameController.text.trim(),
+        'groupName': _groupNameController.text.trim(),
+        'businessType': _businessTypeController.text.trim(),
       };
 
       if (_lat != null && _lng != null) {
@@ -225,6 +262,8 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
       data['id'] = docId;
 
       await docRef.set(data);
+      
+      print('SAVED WITH PROOF LABEL: ${_proofLabel}'); // Debug print
 
       setState(() {
         _isLoading = false;
@@ -273,6 +312,73 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // ── Proof Label Section ───────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.pastelBlue.withOpacity(0.3),
+                      border: Border.all(color: AppColors.deepBlue),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.verified_outlined, color: AppColors.deepBlue, size: 18),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Proof Label (Required)',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _buildField(
+                          controller: _groupNameController,
+                          label: 'Group Name',
+                          hint: 'e.g., GetGetAw, Zape-R-Disapir, etc.',
+                        ),
+                        const SizedBox(height: 8),
+                        _buildField(
+                          controller: _businessTypeController,
+                          label: 'Business Type',
+                          hint: 'e.g., Hotel, Clinic, Retail',
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.deepBlue.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.qr_code, size: 20, color: AppColors.deepBlue),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Proof: ',
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _proofLabel.isEmpty ? 'Enter Group Name & Business Type' : _proofLabel,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: _proofLabel.isEmpty ? AppColors.outOfStock : AppColors.deepBlue,
+                                    fontWeight: _proofLabel.isEmpty ? FontWeight.normal : FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
                   _buildField(
                     controller: _productNameController,
                     label: 'Product Name',
@@ -495,21 +601,16 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       elevation: 2,
                     ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: _isLoading
-                          ? const SizedBox(
-                              key: ValueKey('loading'),
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                            )
-                          : const Text(
-                              key: ValueKey('label'),
-                              'Save Inventory Order',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                            ),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : const Text(
+                            'Save Inventory Order',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -518,8 +619,6 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
           ),
         ),
       ),
-      // Success overlay
-      floatingActionButton: null,
     );
   }
 
@@ -552,19 +651,24 @@ class _CreateCheckinScreenState extends State<CreateCheckinScreen>
   Widget _buildField({
     required TextEditingController controller,
     required String label,
-    required IconData icon,
+    IconData? icon,
+    String? hint,
     int maxLines = 1,
+    TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
+      keyboardType: keyboardType,
       validator: validator,
       style: TextStyle(color: AppColors.deepBlue),
       decoration: InputDecoration(
         labelText: label,
+        hintText: hint,
+        hintStyle: TextStyle(color: AppColors.deepBlue.withOpacity(0.5), fontSize: 12),
         labelStyle: TextStyle(color: AppColors.deepBlue.withOpacity(0.7)),
-        prefixIcon: Icon(icon, color: AppColors.deepBlue),
+        prefixIcon: icon != null ? Icon(icon, color: AppColors.deepBlue) : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
