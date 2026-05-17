@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import './landing_screen.dart';
 import './log_list_screen.dart';
 import './customer_screen.dart';
+import './admin_users_screen.dart';
+import '../services/user_role_service.dart';
 
 // ── Pastel Palette ────────────────────────────────────────────────────────────
 class AppColors {
@@ -33,38 +36,61 @@ const kBgGradient = LinearGradient(
 );
 
 // ── Dashboard Screen ──────────────────────────────────────────────────────────
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  AppRole _role = AppRole.unknown;
+  String _userEmail = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final role = await UserRoleService.getCurrentRole();
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    if (mounted) {
+      setState(() {
+        _role = role;
+        _userEmail = email;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: const _SimpleAppBar(),
-      drawer: const _SimpleDrawer(),
+      drawer: _SimpleDrawer(role: _role, userEmail: _userEmail),
       body: Container(
         decoration: const BoxDecoration(gradient: kBgGradient),
         child: SafeArea(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-            children: const [
-              _SimpleGreeting(),
-              SizedBox(height: 20),
-              _SimpleSectionTitle(
+            children: [
+              _SimpleGreeting(email: _userEmail, role: _role),
+              const SizedBox(height: 20),
+              const _SimpleSectionTitle(
                 icon: Icons.shopping_bag_outlined,
                 label: 'Customer Orders',
               ),
-              SizedBox(height: 10),
-              _CustomerOrdersStream(),
-              SizedBox(height: 26),
-              _SimpleSectionTitle(
+              const SizedBox(height: 10),
+              const _CustomerOrdersStream(),
+              const SizedBox(height: 26),
+              const _SimpleSectionTitle(
                 icon: Icons.inventory_2_outlined,
                 label: 'Inventory',
               ),
-              SizedBox(height: 10),
-              _InventoryStream(),
-              SizedBox(height: 30),
-              _SimpleLogoutButton(),
+              const SizedBox(height: 10),
+              const _InventoryStream(),
             ],
           ),
         ),
@@ -73,7 +99,7 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
-// Separate stream builders
+// ── Customer Orders Stream ────────────────────────────────────────────────────
 class _CustomerOrdersStream extends StatelessWidget {
   const _CustomerOrdersStream();
 
@@ -87,31 +113,25 @@ class _CustomerOrdersStream extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _SimpleScorecardsShimmer();
         }
-        
         if (snapshot.hasError) {
           return _SimpleErrorCard(message: 'Error loading orders: ${snapshot.error}');
         }
-        
         final docs = snapshot.data?.docs ?? [];
         final total = docs.length;
-        
         if (total == 0) {
           return const _SimpleEmptyStateCard(
             message: 'No customer orders yet',
             icon: Icons.shopping_bag_outlined,
           );
         }
-        
         final processing = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
           return data['orderStatus'] == 'Processing';
         }).length;
-        
         final shipped = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
           return data['orderStatus'] == 'Shipped';
         }).length;
-        
         final delivered = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
           return data['orderStatus'] == 'Delivered';
@@ -158,6 +178,7 @@ class _CustomerOrdersStream extends StatelessWidget {
   }
 }
 
+// ── Inventory Stream ──────────────────────────────────────────────────────────
 class _InventoryStream extends StatelessWidget {
   const _InventoryStream();
 
@@ -173,26 +194,21 @@ class _InventoryStream extends StatelessWidget {
             child: CircularProgressIndicator(color: AppColors.deepBlue),
           );
         }
-        
         if (snapshot.hasError) {
           return _SimpleErrorCard(message: 'Error loading inventory: ${snapshot.error}');
         }
-        
         final docs = snapshot.data?.docs ?? [];
-        
         if (docs.isEmpty) {
           return const _SimpleEmptyStateCard(
             message: 'No inventory items found',
             icon: Icons.inventory_2_outlined,
           );
         }
-        
         final lowStock = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
           final status = data['stockStatus'];
           return status == 'Low stock' || status == 'Low Stock';
         }).toList();
-        
         final outOfStock = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
           final status = data['stockStatus'];
@@ -240,7 +256,7 @@ class _InventoryStream extends StatelessWidget {
   }
 }
 
-// ── Simple App Bar ────────────────────────────────────────────────
+// ── Simple App Bar ────────────────────────────────────────────────────────────
 class _SimpleAppBar extends StatelessWidget implements PreferredSizeWidget {
   const _SimpleAppBar();
 
@@ -265,51 +281,89 @@ class _SimpleAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       actions: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none_outlined),
-              onPressed: () {},
-            ),
-            Positioned(
-              top: 10,
-              right: 10,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: AppColors.pastelOrange,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
+        // ── Notification Bell ──────────────────────────────────────────────
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('checkin_logs')
+              .where('stockStatus', whereIn: ['Low stock', 'Out-of-stock'])
+              .snapshots(),
+          builder: (context, snapshot) {
+            final alertCount = snapshot.data?.docs.length ?? 0;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_none_outlined),
+                  onPressed: () => _showNotificationsPanel(context, snapshot.data?.docs ?? []),
                 ),
-              ),
-            ),
-          ],
+                if (alertCount > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: alertCount > 9 ? 18 : 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: AppColors.deepOrange,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: Center(
+                        child: Text(
+                          alertCount > 9 ? '9+' : '$alertCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
+
       ],
+    );
+  }
+
+  void _showNotificationsPanel(BuildContext context, List<QueryDocumentSnapshot> docs) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _NotificationsSheet(docs: docs),
     );
   }
 }
 
-// ── Simple Drawer (Fixed - Logo only, white background) ─────────────────────────────────────────────────
+// ── Simple Drawer (Role-Aware) ────────────────────────────────────────────────
 class _SimpleDrawer extends StatelessWidget {
-  const _SimpleDrawer();
+  final AppRole role;
+  final String userEmail;
+
+  const _SimpleDrawer({required this.role, required this.userEmail});
 
   @override
   Widget build(BuildContext context) {
+    // Derive initials from email
+    final initials = userEmail.isNotEmpty
+        ? userEmail.substring(0, 1).toUpperCase()
+        : '?';
+    final roleLabel = role == AppRole.admin ? 'Admin' : 'Staff';
+
     return Drawer(
       child: Container(
         decoration: const BoxDecoration(gradient: kBgGradient),
         child: Column(
           children: [
-            // Header - Only Logo with white background
+            // Header
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(18, 52, 18, 20),
-              decoration: const BoxDecoration(
-                color: AppColors.deepBlue,
-              ),
+              decoration: const BoxDecoration(color: AppColors.deepBlue),
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -318,12 +372,12 @@ class _SimpleDrawer extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Image.asset(
-                    'assets/images/markify_logo.png',
+                    'assets/images/Markify_Logo.png',
                     width: 100,
                     height: 50,
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => 
-                      const Icon(Icons.store, size: 50, color: AppColors.deepBlue),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.store, size: 50, color: AppColors.deepBlue),
                   ),
                 ),
               ),
@@ -363,46 +417,129 @@ class _SimpleDrawer extends StatelessWidget {
                               builder: (_) => const LogListScreen()));
                     },
                   ),
+                  // ── Admin-only: Manage Users ──────────────────────────
+                  if (role == AppRole.admin)
+                    _SimpleDrawerItem(
+                      icon: Icons.manage_accounts_outlined,
+                      label: 'Manage Users',
+                      subtitle: 'Roles & permissions',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context,
+                            MaterialPageRoute(
+                                builder: (_) => const AdminUsersScreen()));
+                      },
+                    ),
                 ],
               ),
             ),
 
-            // Footer
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            // Footer — shows real user info + logout
+            SafeArea(
+              top: false,
+              child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.30),
                 border: const Border(
                   top: BorderSide(color: Colors.white54),
                 ),
               ),
-              child: const Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _SimpleAvatarIcon(),
-                  SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
                     children: [
-                      Text(
-                        'Juan Dela Cruz',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.deepBlue,
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.avatarGlass,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(0.6)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              color: AppColors.deepOrange,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
-                      Text(
-                        'Store Admin',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.deepBlue,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              userEmail.isNotEmpty ? userEmail : 'Loading...',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.deepBlue,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              roleLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.deepBlue.withOpacity(0.70),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      // ── 3-dot logout in drawer footer ──────────────────
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert,
+                            color: AppColors.deepBlue.withOpacity(0.7), size: 20),
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        onSelected: (value) async {
+                          if (value == 'logout') {
+                            Navigator.pop(context); // close drawer
+                            await FirebaseAuth.instance.signOut();
+                            if (context.mounted) {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const LandingScreen()),
+                                (route) => false,
+                              );
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'logout',
+                            child: Row(
+                              children: const [
+                                Icon(Icons.logout,
+                                    color: AppColors.deepOrange, size: 18),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Logout',
+                                  style: TextStyle(
+                                    color: AppColors.deepOrange,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ],
               ),
             ),
+            ), // SafeArea
           ],
         ),
       ),
@@ -410,7 +547,7 @@ class _SimpleDrawer extends StatelessWidget {
   }
 }
 
-// ── Simple Drawer Item ───────────────────────────────────────────────────────
+// ── Simple Drawer Item ────────────────────────────────────────────────────────
 class _SimpleDrawerItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -488,45 +625,22 @@ class _SimpleDrawerItem extends StatelessWidget {
   }
 }
 
-class _SimpleAvatarIcon extends StatelessWidget {
-  const _SimpleAvatarIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: AppColors.avatarGlass,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withOpacity(0.6)),
-      ),
-      child: const Center(
-        child: Text(
-          'JD',
-          style: TextStyle(
-            color: AppColors.deepOrange,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Simple Greeting ──────────────────────────────────────────────────────────
+// ── Simple Greeting (role-aware) ──────────────────────────────────────────────
 class _SimpleGreeting extends StatelessWidget {
-  const _SimpleGreeting();
+  final String email;
+  final AppRole role;
+
+  const _SimpleGreeting({required this.email, required this.role});
 
   @override
   Widget build(BuildContext context) {
+    final name = email.isNotEmpty ? email.split('@').first : 'there';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Hello, Juan 👋',
-          style: TextStyle(
+          'Hello, $name 👋',
+          style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w600,
             color: AppColors.deepBlue,
@@ -545,7 +659,7 @@ class _SimpleGreeting extends StatelessWidget {
   }
 }
 
-// ── Simple Section Title ─────────────────────────────────────────────────────
+// ── Simple Section Title ──────────────────────────────────────────────────────
 class _SimpleSectionTitle extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -569,7 +683,7 @@ class _SimpleSectionTitle extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
             color: AppColors.deepBlue,
@@ -584,7 +698,7 @@ class _SimpleSectionTitle extends StatelessWidget {
   }
 }
 
-// ── Simple Scorecard ─────────────────────────────────────────────────────────
+// ── Simple Scorecard ──────────────────────────────────────────────────────────
 class _SimpleScorecard extends StatelessWidget {
   final String label;
   final int count;
@@ -685,7 +799,7 @@ class _SimpleScorecard extends StatelessWidget {
   }
 }
 
-// ── Simple Scorecards Shimmer ────────────────────────────────────────────────
+// ── Simple Scorecards Shimmer ─────────────────────────────────────────────────
 class _SimpleScorecardsShimmer extends StatelessWidget {
   const _SimpleScorecardsShimmer();
 
@@ -719,7 +833,7 @@ class _SimpleScorecardsShimmer extends StatelessWidget {
   }
 }
 
-// ── Simple Inventory Group Header ───────────────────────────────────────────
+// ── Simple Inventory Group Header ─────────────────────────────────────────────
 class _SimpleInventoryGroupHeader extends StatelessWidget {
   final String label;
   final int count;
@@ -765,22 +879,18 @@ class _SimpleInventoryGroupHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-            child: Divider(color: Colors.white.withOpacity(0.80))),
+        Expanded(child: Divider(color: Colors.white.withOpacity(0.80))),
       ],
     );
   }
 }
 
-// ── Simple Inventory Row ─────────────────────────────────────────────────────
+// ── Simple Inventory Row ──────────────────────────────────────────────────────
 class _SimpleInventoryRow extends StatelessWidget {
   final Map<String, dynamic> data;
   final Color statusColor;
 
-  const _SimpleInventoryRow({
-    required this.data,
-    required this.statusColor,
-  });
+  const _SimpleInventoryRow({required this.data, required this.statusColor});
 
   @override
   Widget build(BuildContext context) {
@@ -818,7 +928,7 @@ class _SimpleInventoryRow extends StatelessWidget {
           Expanded(
             child: Text(
               productName,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.deepBlue,
@@ -848,7 +958,7 @@ class _SimpleInventoryRow extends StatelessWidget {
   }
 }
 
-// ── Simple Inventory All Good Card ───────────────────────────────────────────
+// ── Simple Inventory All Good Card ────────────────────────────────────────────
 class _SimpleInventoryAllGoodCard extends StatelessWidget {
   const _SimpleInventoryAllGoodCard();
 
@@ -870,8 +980,7 @@ class _SimpleInventoryAllGoodCard extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          Icon(Icons.check_circle_outline,
-              color: AppColors.delivered, size: 26),
+          Icon(Icons.check_circle_outline, color: AppColors.delivered, size: 26),
           SizedBox(width: 12),
           Text(
             'All products are sufficiently stocked.',
@@ -887,15 +996,12 @@ class _SimpleInventoryAllGoodCard extends StatelessWidget {
   }
 }
 
-// ── Simple Empty State Card ──────────────────────────────────────────────────
+// ── Simple Empty State Card ───────────────────────────────────────────────────
 class _SimpleEmptyStateCard extends StatelessWidget {
   final String message;
   final IconData icon;
 
-  const _SimpleEmptyStateCard({
-    required this.message,
-    required this.icon,
-  });
+  const _SimpleEmptyStateCard({required this.message, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -932,7 +1038,7 @@ class _SimpleEmptyStateCard extends StatelessWidget {
   }
 }
 
-// ── Simple Error Card ────────────────────────────────────────────────────────
+// ── Simple Error Card ─────────────────────────────────────────────────────────
 class _SimpleErrorCard extends StatelessWidget {
   final String message;
 
@@ -949,15 +1055,12 @@ class _SimpleErrorCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: AppColors.outOfStock),
+          const Icon(Icons.error_outline, color: AppColors.outOfStock),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: AppColors.deepBlue,
-                fontSize: 13,
-              ),
+              style: const TextStyle(color: AppColors.deepBlue, fontSize: 13),
             ),
           ),
         ],
@@ -966,18 +1069,271 @@ class _SimpleErrorCard extends StatelessWidget {
   }
 }
 
-// ── Simple Logout Button ─────────────────────────────────────────────────────
+// ── Notifications Bottom Sheet ────────────────────────────────────────────────
+class _NotificationsSheet extends StatelessWidget {
+  final List<QueryDocumentSnapshot> docs;
+  const _NotificationsSheet({required this.docs});
+
+  @override
+  Widget build(BuildContext context) {
+    final lowStock = docs
+        .where((d) => (d.data() as Map)['stockStatus'] == 'Low stock')
+        .toList();
+    final outOfStock = docs
+        .where((d) => (d.data() as Map)['stockStatus'] == 'Out-of-stock')
+        .toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.35,
+      maxChildSize: 0.85,
+      expand: false,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          gradient: kBgGradient,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 8),
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.deepBlue.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Title row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active_outlined,
+                      color: AppColors.deepBlue, size: 22),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Stock Alerts',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.deepBlue,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.deepOrange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${docs.length} alert${docs.length != 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.deepOrange,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: docs.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_outline,
+                              size: 48,
+                              color: AppColors.delivered.withOpacity(0.6)),
+                          const SizedBox(height: 12),
+                          Text(
+                            'All products are well stocked!',
+                            style: TextStyle(
+                              color: AppColors.deepBlue.withOpacity(0.7),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      children: [
+                        if (outOfStock.isNotEmpty) ...[
+                          _NotifSectionHeader(
+                            label: 'Out-of-Stock',
+                            count: outOfStock.length,
+                            color: AppColors.outOfStock,
+                            icon: Icons.cancel_outlined,
+                          ),
+                          const SizedBox(height: 6),
+                          ...outOfStock.map((d) => _NotifItem(
+                                doc: d,
+                                color: AppColors.outOfStock,
+                                icon: Icons.cancel_outlined,
+                              )),
+                          const SizedBox(height: 14),
+                        ],
+                        if (lowStock.isNotEmpty) ...[
+                          _NotifSectionHeader(
+                            label: 'Low Stock',
+                            count: lowStock.length,
+                            color: AppColors.lowStock,
+                            icon: Icons.warning_amber_outlined,
+                          ),
+                          const SizedBox(height: 6),
+                          ...lowStock.map((d) => _NotifItem(
+                                doc: d,
+                                color: AppColors.lowStock,
+                                icon: Icons.warning_amber_outlined,
+                              )),
+                        ],
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotifSectionHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  const _NotifSectionHeader({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$count',
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.bold, color: color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NotifItem extends StatelessWidget {
+  final QueryDocumentSnapshot doc;
+  final Color color;
+  final IconData icon;
+
+  const _NotifItem({
+    required this.doc,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final data = doc.data() as Map<String, dynamic>;
+    final productName = data['productName'] ?? 'Unnamed Product';
+    final supplier = data['supplierName'] ?? 'Unknown supplier';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: color, width: 4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  productName,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.deepBlue,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Supplier: $supplier',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.deepBlue.withOpacity(0.60),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Simple Logout Button ──────────────────────────────────────────────────────
 class _SimpleLogoutButton extends StatelessWidget {
   const _SimpleLogoutButton();
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LandingScreen()),
-        (route) => false,
-      ),
+      onTap: () async {
+        await FirebaseAuth.instance.signOut();
+        if (context.mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const LandingScreen()),
+            (route) => false,
+          );
+        }
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         height: 50,

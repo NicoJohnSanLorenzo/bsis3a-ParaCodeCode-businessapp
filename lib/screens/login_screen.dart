@@ -126,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // ── Brand Logo ───────────────────────────────────────
                   Image.asset(
-                    'assets/images/markify_logo.png',
+                    'assets/images/Markify_Logo.png',
                     width: 160,
                     height: 160,
                     fit: BoxFit.contain,

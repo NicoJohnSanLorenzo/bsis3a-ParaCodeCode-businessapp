@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // ── Pastel Palette (same as Landing & Login Screen) ───────────────────────────
 class _AppColors {
@@ -18,10 +19,10 @@ const _kBgGradient = LinearGradient(
   end: Alignment.bottomRight,
   stops: [0.0, 0.40, 0.75, 1.0],
   colors: [
-    Color(0xFFDCEAF7), // Pastel blue
-    Color(0xFFEAD5F0), // Pastel lavender
-    Color(0xFFFFE5CC), // Pastel peach
-    Color(0xFFFFD6B0), // Warm pastel orange
+    Color(0xFFDCEAF7),
+    Color(0xFFEAD5F0),
+    Color(0xFFFFE5CC),
+    Color(0xFFFFD6B0),
   ],
 );
 
@@ -68,6 +69,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: emailController.text.trim(),
         password: passwordController.text,
       );
+
+      // ── RBAC: Save user profile with default 'staff' role ──────────────
+      final user = FirebaseAuth.instance.currentUser!;
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'email': user.email,
+        'role': 'staff', // Default role. Promote to 'admin' via Firebase Console.
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
       emailController.clear();
       passwordController.clear();
       confirmController.clear();
@@ -106,8 +116,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
         ),
         backgroundColor: isError
-            ? _AppColors.errorRed    // Pastel red for errors
-            : _AppColors.deepBlue,  // Deep blue for success
+            ? _AppColors.errorRed
+            : _AppColors.deepBlue,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10)),
@@ -134,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   // ── Brand Logo ───────────────────────────────────────
                   Image.asset(
-                    'assets/images/markify_logo.png',
+                    'assets/images/Markify_Logo.png',
                     width: 160,
                     height: 160,
                     fit: BoxFit.contain,
