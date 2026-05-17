@@ -8,7 +8,7 @@
 
 ## 📥 Download
 
-[![Download APK](https://img.shields.io/badge/Download-Markify%20v1.0.1-blue?style=for-the-badge&logo=android)](https://github.com/NicoJohnSanLorenzo/bsis3a-ParaCodeCode-businessapp/releases/download/v1.0.1/Markify-v1.0.1.apk)
+[![Download APK](https://img.shields.io/badge/Download-Markify%20v1.0.1-blue?style=for-the-badge&logo=android)](https://github.com/NicoJohnSanLorenzo/bsis3a-ParaCodeCode-businessapp/releases/tag/v1.0.1)
 
 > Requires Android 6.0 or higher
 
