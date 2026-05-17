@@ -113,8 +113,9 @@ Stores user profile and role information.
 4. **Configure your API key**
    - Create a `.env` file in the project root
    - Add your Groq API key:
-
-GROQ_API_KEY=your_groq_api_key_here
+```bash
+   GROQ_API_KEY=your_groq_api_key_here
+```
 
 5. **Run the app**
 ```bash
