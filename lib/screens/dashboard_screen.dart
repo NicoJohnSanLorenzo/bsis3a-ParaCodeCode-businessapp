@@ -5,6 +5,7 @@ import './landing_screen.dart';
 import './log_list_screen.dart';
 import './customer_screen.dart';
 import './admin_users_screen.dart';
+import './ai_assistant_screen.dart';
 import '../services/user_role_service.dart';
 
 // ── Pastel Palette ────────────────────────────────────────────────────────────
@@ -415,6 +416,16 @@ class _SimpleDrawer extends StatelessWidget {
                       Navigator.push(context,
                           MaterialPageRoute(
                               builder: (_) => const LogListScreen()));
+                    },
+                  ),
+                  _SimpleDrawerItem(
+                    icon: Icons.auto_awesome,
+                    label: 'AI Assistant',
+                    subtitle: 'Ask about your business',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const AiAssistantScreen()));
                     },
                   ),
                   // ── Admin-only: Manage Users ──────────────────────────
