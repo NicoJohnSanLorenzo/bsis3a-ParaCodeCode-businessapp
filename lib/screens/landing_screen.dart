@@ -47,7 +47,7 @@ class LandingScreen extends StatelessWidget {
 
                   // ── Brand Logo ─────────────────────────────────────────
                   Image.asset(
-                    'assets/images/markify_logo.png',
+                    'assets/images/Markify_Logo.png',
                     width: 360,
                     height: 360,
                     fit: BoxFit.contain,

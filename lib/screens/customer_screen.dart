@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import './add_customer_order_screen.dart';
+import '../services/user_role_service.dart';
 
-// ── Your Color Palette ────────────────────────────────────────────────────────────
+// ── Color Palette ─────────────────────────────────────────────────────────────
 class AppColors {
   static const pastelBlue     = Color(0xFFAEC6E8);
   static const pastelOrange   = Color(0xFFFFCBA4);
@@ -27,8 +28,23 @@ const kBgGradient = LinearGradient(
   ],
 );
 
-class CustomerScreen extends StatelessWidget {
+class CustomerScreen extends StatefulWidget {
   const CustomerScreen({super.key});
+
+  @override
+  State<CustomerScreen> createState() => _CustomerScreenState();
+}
+
+class _CustomerScreenState extends State<CustomerScreen> {
+  AppRole _role = AppRole.unknown;
+
+  @override
+  void initState() {
+    super.initState();
+    UserRoleService.getCurrentRole().then((r) {
+      if (mounted) setState(() => _role = r);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,14 +59,15 @@ class CustomerScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
+      // ── FAB visible to all (both admin & staff can add orders) ────────────
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddCustomerOrderScreen()),
         ),
-        child: const Icon(Icons.add),
         backgroundColor: AppColors.pastelBlue,
         foregroundColor: AppColors.deepBlue,
+        child: const Icon(Icons.add),
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: kBgGradient),
@@ -65,67 +82,65 @@ class CustomerScreen extends StatelessWidget {
                 child: CircularProgressIndicator(color: AppColors.deepBlue),
               );
             }
-
             if (snapshot.hasError) {
-              return Center(
-                child: Text('Error: ${snapshot.error}'),
-              );
+              return Center(child: Text('Error: ${snapshot.error}'));
             }
 
             final docs = snapshot.data?.docs ?? [];
-            
             if (docs.isEmpty) {
               return const Center(
                 child: Text('No orders found. Tap + to add.'),
               );
             }
 
-            // Separate orders by status
-            final processing = docs.where((d) => 
+            final processing = docs.where((d) =>
               (d.data() as Map)['orderStatus'] == 'Processing').toList();
-            final shipped = docs.where((d) => 
+            final shipped = docs.where((d) =>
               (d.data() as Map)['orderStatus'] == 'Shipped').toList();
-            final delivered = docs.where((d) => 
+            final delivered = docs.where((d) =>
               (d.data() as Map)['orderStatus'] == 'Delivered').toList();
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
               children: [
-                // Processing Section
-                _buildSectionHeader('Processing', processing.length, AppColors.processing, Icons.hourglass_empty),
+                _buildSectionHeader('Processing', processing.length,
+                    AppColors.processing, Icons.hourglass_empty),
                 const SizedBox(height: 8),
                 ...processing.map((doc) => _OrderCard(
-                  docId: doc.id,
-                  data: doc.data() as Map<String, dynamic>,
-                  statusColor: AppColors.processing,
-                  statusIcon: Icons.hourglass_empty,
-                )),
+                      docId: doc.id,
+                      data: doc.data() as Map<String, dynamic>,
+                      statusColor: AppColors.processing,
+                      statusIcon: Icons.hourglass_empty,
+                      role: _role,
+                    )),
                 if (processing.isEmpty) _buildEmptyMessage('No processing orders'),
-                
+
                 const SizedBox(height: 24),
-                
-                // Shipped Section
-                _buildSectionHeader('Shipped', shipped.length, AppColors.shipped, Icons.local_shipping_outlined),
+
+                _buildSectionHeader('Shipped', shipped.length,
+                    AppColors.shipped, Icons.local_shipping_outlined),
                 const SizedBox(height: 8),
                 ...shipped.map((doc) => _OrderCard(
-                  docId: doc.id,
-                  data: doc.data() as Map<String, dynamic>,
-                  statusColor: AppColors.shipped,
-                  statusIcon: Icons.local_shipping_outlined,
-                )),
+                      docId: doc.id,
+                      data: doc.data() as Map<String, dynamic>,
+                      statusColor: AppColors.shipped,
+                      statusIcon: Icons.local_shipping_outlined,
+                      role: _role,
+                    )),
                 if (shipped.isEmpty) _buildEmptyMessage('No shipped orders'),
-                
+
                 const SizedBox(height: 24),
-                
-                // Delivered Section
-                _buildSectionHeader('Delivered', delivered.length, AppColors.delivered, Icons.check_circle_outline),
+
+                _buildSectionHeader('Delivered', delivered.length,
+                    AppColors.delivered, Icons.check_circle_outline),
                 const SizedBox(height: 8),
                 ...delivered.map((doc) => _OrderCard(
-                  docId: doc.id,
-                  data: doc.data() as Map<String, dynamic>,
-                  statusColor: AppColors.delivered,
-                  statusIcon: Icons.check_circle_outline,
-                )),
+                      docId: doc.id,
+                      data: doc.data() as Map<String, dynamic>,
+                      statusColor: AppColors.delivered,
+                      statusIcon: Icons.check_circle_outline,
+                      role: _role,
+                    )),
                 if (delivered.isEmpty) _buildEmptyMessage('No delivered orders'),
               ],
             );
@@ -135,7 +150,8 @@ class CustomerScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(String title, int count, Color color, IconData icon) {
+  Widget _buildSectionHeader(
+      String title, int count, Color color, IconData icon) {
     return Row(
       children: [
         Icon(icon, color: color, size: 22),
@@ -184,17 +200,20 @@ class CustomerScreen extends StatelessWidget {
   }
 }
 
+// ── Order Card (role-aware) ───────────────────────────────────────────────────
 class _OrderCard extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> data;
   final Color statusColor;
   final IconData statusIcon;
+  final AppRole role;
 
   const _OrderCard({
     required this.docId,
     required this.data,
     required this.statusColor,
     required this.statusIcon,
+    required this.role,
   });
 
   @override
@@ -210,8 +229,8 @@ class _OrderCardState extends State<_OrderCard> {
           .delete();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Order deleted successfully'),
+          const SnackBar(
+            content: Text('Order deleted successfully'),
             backgroundColor: AppColors.deepBlue,
           ),
         );
@@ -251,41 +270,55 @@ class _OrderCardState extends State<_OrderCard> {
   }
 
   void _editOrder() {
-    final nameCtrl = TextEditingController(text: widget.data['customerName'] ?? '');
+    final nameCtrl    = TextEditingController(text: widget.data['customerName'] ?? '');
     final addressCtrl = TextEditingController(text: widget.data['customerAddress'] ?? '');
-    final phoneCtrl = TextEditingController(text: widget.data['phoneNumber'] ?? '');
+    final phoneCtrl   = TextEditingController(text: widget.data['phoneNumber'] ?? '');
     final productCtrl = TextEditingController(text: widget.data['productName'] ?? '');
-    final qtyCtrl = TextEditingController(text: (widget.data['orderQuantity'] ?? 0).toString());
+    final qtyCtrl     = TextEditingController(
+        text: (widget.data['orderQuantity'] ?? 0).toString());
     String status = widget.data['orderStatus'] ?? 'Processing';
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
+        builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Edit Order'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Customer Name')),
+                TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Customer Name')),
                 const SizedBox(height: 8),
-                TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address'), maxLines: 2),
+                TextField(
+                    controller: addressCtrl,
+                    decoration: const InputDecoration(labelText: 'Address'),
+                    maxLines: 2),
                 const SizedBox(height: 8),
-                TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Phone'), keyboardType: TextInputType.phone),
+                TextField(
+                    controller: phoneCtrl,
+                    decoration: const InputDecoration(labelText: 'Phone'),
+                    keyboardType: TextInputType.phone),
                 const SizedBox(height: 8),
-                TextField(controller: productCtrl, decoration: const InputDecoration(labelText: 'Product Name')),
+                TextField(
+                    controller: productCtrl,
+                    decoration: const InputDecoration(labelText: 'Product Name')),
                 const SizedBox(height: 8),
-                TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: 'Quantity'), keyboardType: TextInputType.number),
+                TextField(
+                    controller: qtyCtrl,
+                    decoration: const InputDecoration(labelText: 'Quantity'),
+                    keyboardType: TextInputType.number),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: status,
                   decoration: const InputDecoration(labelText: 'Status'),
                   items: const [
                     DropdownMenuItem(value: 'Processing', child: Text('Processing')),
-                    DropdownMenuItem(value: 'Shipped', child: Text('Shipped')),
-                    DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
+                    DropdownMenuItem(value: 'Shipped',    child: Text('Shipped')),
+                    DropdownMenuItem(value: 'Delivered',  child: Text('Delivered')),
                   ],
-                  onChanged: (val) => setState(() => status = val!),
+                  onChanged: (val) => setDialogState(() => status = val!),
                 ),
               ],
             ),
@@ -302,12 +335,12 @@ class _OrderCardState extends State<_OrderCard> {
                       .collection('customer_orders')
                       .doc(widget.docId)
                       .update({
-                    'customerName': nameCtrl.text.trim(),
+                    'customerName':    nameCtrl.text.trim(),
                     'customerAddress': addressCtrl.text.trim(),
-                    'phoneNumber': phoneCtrl.text.trim(),
-                    'productName': productCtrl.text.trim(),
-                    'orderQuantity': int.tryParse(qtyCtrl.text.trim()) ?? 0,
-                    'orderStatus': status,
+                    'phoneNumber':     phoneCtrl.text.trim(),
+                    'productName':     productCtrl.text.trim(),
+                    'orderQuantity':   int.tryParse(qtyCtrl.text.trim()) ?? 0,
+                    'orderStatus':     status,
                   });
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (mounted) {
@@ -316,7 +349,7 @@ class _OrderCardState extends State<_OrderCard> {
                     );
                   }
                 } catch (e) {
-                  // Error handling
+                  // handle error
                 }
               },
               child: const Text('Save'),
@@ -329,6 +362,8 @@ class _OrderCardState extends State<_OrderCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = widget.role == AppRole.admin;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -350,13 +385,13 @@ class _OrderCardState extends State<_OrderCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row with customer name and status
+            // Customer name + status badge
             Row(
               children: [
                 Expanded(
                   child: Text(
                     widget.data['customerName'] ?? 'Unknown Customer',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AppColors.deepBlue,
@@ -397,15 +432,31 @@ class _OrderCardState extends State<_OrderCard> {
             if (widget.data['dateCreated'] != null)
               _buildInfoRow(Icons.calendar_today, _formatDate(widget.data['dateCreated'])),
             const SizedBox(height: 8),
-            // Action buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _buildActionButton(Icons.edit_outlined, 'Edit', AppColors.deepBlue, _editOrder),
-                const SizedBox(width: 8),
-                _buildActionButton(Icons.delete_outline, 'Delete', Colors.red, _confirmDelete),
-              ],
-            ),
+            // ── Admin-only: Edit & Delete buttons ────────────────────────────
+            if (isAdmin)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _buildActionButton(
+                      Icons.edit_outlined, 'Edit', AppColors.deepBlue, _editOrder),
+                  const SizedBox(width: 8),
+                  _buildActionButton(
+                      Icons.delete_outline, 'Delete', Colors.red, _confirmDelete),
+                ],
+              ),
+            // ── Staff: read-only label ────────────────────────────────────────
+            if (!isAdmin && widget.role != AppRole.unknown)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'View only',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: AppColors.deepBlue.withOpacity(0.40),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -434,7 +485,8 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildActionButton(
+      IconData icon, String label, Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
