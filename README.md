@@ -143,19 +143,3 @@ GROQ_API_KEY=your_groq_api_key_here
 
 **BSIS 3A — ParaCodeCode**
 
----
-
-## 📸 Screenshots
-
-> _Screenshots will be added once the UI is finalized._
-
-| Screen | Preview |
-|---|---|
-| Landing Screen | ![Landing](screenshots/landing_screen.png) |
-| Dashboard | ![Dashboard](screenshots/dashboard_screen.png) |
-| Customer Orders | ![Customer Orders](screenshots/customer_orders.png) |
-| Add Order | ![Add Order](screenshots/add_order.png) |
-| Inventory List | ![Inventory](screenshots/inventory_list.png) |
-| Add Inventory Item | ![Add Item](screenshots/add_inventory.png) |
-| AI Assistant | ![AI Assistant](screenshots/ai_assistant.png) |
-| Manage Users | ![Manage Users](screenshots/manage_users.png) |
