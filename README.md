@@ -1,55 +1,122 @@
-# Markify — ParaCodeCode Business App
+# 🏪 Markify — Business Management App
 
-## 📱 About the App
-
-**Markify** is a mobile application built with Flutter and Firebase that helps small businesses manage inventory and customer orders in one place. Staff can log and track inventory stock levels, manage customer orders, and receive real-time stock alerts — all from a clean, role-aware interface. Admins get additional controls to manage user roles and permissions across the team.
+> **BSIS 3A — ParaCodeCode** | Flutter + Firebase + Groq AI
 
 ---
 
-## 📥 Download
+## 📱 App Overview
+
+**Markify** is a mobile business management app built with Flutter and Firebase. It helps small businesses track inventory, manage customer orders, and get real-time AI-powered insights — all from a role-aware, clean interface.
+
+---
+
+## ⬇️ Download the APK
 
 [![Download APK](https://img.shields.io/badge/Download-Markify%20v1.0.1-blue?style=for-the-badge&logo=android)](https://github.com/NicoJohnSanLorenzo/bsis3a-ParaCodeCode-businessapp/releases/tag/v1.0.1)
 
-> Requires Android 6.0 or higher
+> **Requires:** Android 6.0 (API 23) or higher
 
 ---
 
-## ✨ Features
+## 🤖 AI Feature Showcase — Step by Step
+
+The AI Assistant is the main highlight of the app. Here's exactly how to run and demonstrate it:
+
+### Prerequisites
+
+Before launching the app, make sure you have a **Groq API key** (free at [console.groq.com](https://console.groq.com)):
+
+1. Create a `.env` file in the root of the project
+2. Add the following line:
+   ```
+   GROQ_API_KEY=your_groq_api_key_here
+   ```
+
+---
+
+### 🚀 Step-by-Step: Showcasing the AI
+
+#### Step 1 — Register or Log In
+- Launch the app → tap **Register** to create a new account, or **Login** with existing credentials
+- Use any valid email and password (Firebase Auth)
+
+#### Step 2 — Seed Some Data (Important for AI context)
+Before using the AI, add real data so it has something to analyze:
+
+- Go to **Customer Orders** → tap the **＋** button → add at least 2–3 orders with different statuses (`Processing`, `Shipped`, `Delivered`)
+- Go to **Inventory (Log List)** → tap **＋** → add items with statuses like `Low stock` or `Out-of-stock`
+
+#### Step 3 — Open the AI Assistant
+- From the Dashboard, tap the **AI Assistant** icon (sparkle ✨ icon in the bottom nav)
+- The assistant greets you and shows **5 quick-tap suggestion chips**
+
+#### Step 4 — Try These Suggested Questions (tap the chips or type manually)
+
+| Question | What the AI Does |
+|---|---|
+| `How many orders are processing?` | Pulls live Firestore order data and counts by status |
+| `Which products are low in stock?` | Lists all inventory items marked Low/Out-of-stock |
+| `Give me a business summary` | Generates a full summary of orders + inventory |
+| `How many customers do we have?` | Counts records from the customers collection |
+| `Any out-of-stock products?` | Highlights critical stock alerts |
+
+#### Step 5 — Ask Custom Questions
+Type anything in the input bar, for example:
+- *"Which orders haven't been delivered yet?"*
+- *"What's the total number of inventory items?"*
+- *"Summarize today's business status"*
+
+The AI fetches **live data from Firestore** on every message, so answers always reflect the current state of your business.
+
+---
+
+## 🧠 How the AI Works (Technical)
+
+```
+User Question
+     │
+     ▼
+Fetch live data from Firestore
+  ├── customer_orders (all records)
+  ├── checkin_logs    (inventory)
+  └── customers       (customer list)
+     │
+     ▼
+Build structured context string
+  (order counts by status, low/out-of-stock items, recent order details)
+     │
+     ▼
+Send to Groq API — llama-3.1-8b-instant model
+  System prompt: business assistant persona + live data context
+  User message: the question
+     │
+     ▼
+Display AI response in chat bubble
+```
+
+**Model used:** `llama-3.1-8b-instant` via Groq Cloud (free tier, very fast)  
+**API key:** loaded from `.env` file at runtime — never hardcoded  
+**Max tokens:** 512 per response
+
+---
+
+## ✨ All App Features
 
 | Feature | Description |
 |---|---|
-| 🔐 Authentication | Email/password login and registration via Firebase Auth |
-| 📊 Dashboard | Real-time overview of order statuses and inventory alerts |
-| 🛒 Customer Orders | View, search, filter, and add customer orders |
-| 📦 Inventory | Track product stock levels with Low Stock / Out-of-Stock alerts |
-| 🤖 AI Assistant | Chat-based assistant (powered by Groq API) for business queries |
-| 👥 User Management | Admin-only screen to assign and change user roles |
-| 🔔 Notifications | Bell icon with live badge count for stock alert items |
-
----
-
-## 🗂️ App Screens
-
-| Screen | File |
-|---|---|
-| Landing (Welcome) | `landing_screen.dart` |
-| Login | `login_screen.dart` |
-| Register | `register_screen.dart` |
-| Dashboard | `dashboard_screen.dart` |
-| Customer Orders | `customer_screen.dart` |
-| Add Customer Order | `add_customer_order_screen.dart` |
-| Inventory (Log List) | `log_list_screen.dart` |
-| Add Inventory Item | `create_checkin_screen.dart` |
-| AI Assistant | `ai_assistant_screen.dart` |
-| Manage Users (Admin) | `admin_users_screen.dart` |
+| 🔐 Authentication | Email/password login & registration via Firebase Auth |
+| 📊 Dashboard | Real-time overview of order statuses and stock alerts |
+| 🛒 Customer Orders | View, search, filter, and add orders |
+| 📦 Inventory | Track stock levels with Low Stock / Out-of-Stock alerts |
+| 🤖 AI Assistant | Chat-based assistant powered by **Groq (LLaMA 3.1)** with live Firestore context |
+| 👥 User Management | Admin-only screen to assign and change user roles (Admin / Staff) |
+| 🔔 Notifications | Bell icon with live badge count for stock alerts |
 
 ---
 
 ## 🗄️ Firestore Collections
 
-### 1. `customer_orders`
-Stores order details placed by customers.
-
+### `customer_orders`
 | Field | Type | Description |
 |---|---|---|
 | `customerName` | String | Name of the customer |
@@ -58,71 +125,57 @@ Stores order details placed by customers.
 | `product` | String | Product ordered |
 | `quantity` | Number | Quantity ordered |
 | `orderStatus` | String | `Processing`, `Shipped`, or `Delivered` |
-| `dateCreated` | Timestamp | Date and time the order was placed |
+| `dateCreated` | Timestamp | Date and time placed |
 
----
-
-### 2. `checkin_logs`
-Tracks inventory items and their stock levels.
-
+### `checkin_logs` (Inventory)
 | Field | Type | Description |
 |---|---|---|
 | `productName` | String | Name of the product |
 | `stockStatus` | String | `In-stock`, `Low stock`, or `Out-of-stock` |
-| `supplierName` | String | Name of the supplier |
+| `supplierName` | String | Supplier name |
 | `note` | String | Optional staff notes |
-| `createdBy` | String | Staff member who logged the item |
-| `groupName` | String | Product group or brand label |
-| `businessType` | String | Type of business/category |
-| `latitude` | Number | GPS latitude at time of log |
-| `longitude` | Number | GPS longitude at time of log |
-| `imageUrl` | String | Optional proof/photo URL |
-| `createdAt` | Timestamp | Date and time the record was created |
+| `createdBy` | String | Staff who logged the item |
+| `imageUrl` | String | Optional photo proof URL |
+| `createdAt` | Timestamp | Record creation date |
 
----
-
-### 3. `users`
-Stores user profile and role information.
-
+### `users`
 | Field | Type | Description |
 |---|---|---|
-| `email` | String | User's email address |
+| `email` | String | User's email |
 | `role` | String | `admin` or `staff` |
 | `createdAt` | Timestamp | Account creation date |
 
 ---
 
-## 🚀 Steps to Run
+## 🛠️ Running from Source
 
-1. **Clone the repository**
+### Requirements
+- Flutter SDK 3.x+
+- Dart 3.x+
+- Android Studio / Xcode
+- Firebase project (Android + iOS configured)
+- Groq API key ([console.groq.com](https://console.groq.com) — free)
+
+### Steps
+
 ```bash
-   git clone https://github.com/NicoJohnSanLorenzo/bsis3a-ParaCodeCode-businessapp.git
-   cd bsis3a-ParaCodeCode-businessapp
+# 1. Clone the repo
+git clone https://github.com/NicoJohnSanLorenzo/bsis3a-ParaCodeCode-businessapp.git
+cd bsis3a-ParaCodeCode-businessapp
+
+# 2. Install dependencies
+flutter pub get
+
+# 3. Set up Firebase
+#    - Place google-services.json in android/app/
+#    - Place GoogleService-Info.plist in ios/Runner/
+
+# 4. Create .env file in project root
+echo "GROQ_API_KEY=your_groq_api_key_here" > .env
+
+# 5. Run the app
+flutter run
 ```
-
-2. **Install Flutter dependencies**
-```bash
-   flutter pub get
-```
-
-3. **Set up Firebase**
-   - Go to [Firebase Console](https://console.firebase.google.com/) and create a project
-   - Add your Android/iOS app and download `google-services.json` (Android) or `GoogleService-Info.plist` (iOS)
-   - Place the config file in the appropriate directory (`android/app/` or `ios/Runner/`)
-
-4. **Configure your API key**
-   - Create a `.env` file in the project root
-   - Add your Groq API key:
-```bash
-   GROQ_API_KEY=your_groq_api_key_here
-```
-
-5. **Run the app**
-```bash
-   flutter run
-```
-
-> **Requirements:** Flutter SDK 3.x+, Dart 3.x+, Android Studio or Xcode, Firebase project configured
 
 ---
 
@@ -133,8 +186,8 @@ Stores user profile and role information.
 | `firebase_core` | Firebase initialization |
 | `firebase_auth` | User authentication |
 | `cloud_firestore` | Realtime database |
-| `flutter_dotenv` | Environment variable management |
-| `http` | Groq AI API calls |
+| `flutter_dotenv` | `.env` file for API key management |
+| `http` | Groq AI API HTTP calls |
 | `geolocator` | GPS coordinates for inventory logs |
 | `image_picker` | Camera/gallery photo upload |
 
@@ -143,4 +196,3 @@ Stores user profile and role information.
 ## 👥 Team
 
 **BSIS 3A — ParaCodeCode**
-
