@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // ── Color Palette ─────────────────────────────────────────────────────────────
 class _AppColors {
-  static const pastelBlue  = Color(0xFFAEC6E8);
-  static const deepBlue    = Color(0xFF3A5A8A);
-  static const deepOrange  = Color(0xFFD4845A);
+  static const pastelBlue   = Color(0xFFAEC6E8);
+  static const deepBlue     = Color(0xFF3A5A8A);
+  static const deepOrange   = Color(0xFFD4845A);
   static const pastelOrange = Color(0xFFFFCBA4);
-  static const errorRed    = Color(0xFFE57373);
+  static const errorRed     = Color(0xFFE57373);
 }
 
 const _kBgGradient = LinearGradient(
@@ -105,6 +106,28 @@ class _UserCard extends StatelessWidget {
   const _UserCard({required this.uid, required this.data});
 
   Future<void> _changeRole(BuildContext context, String newRole) async {
+    // ── Prevent admin from changing their own role ──────────────────────────
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null && currentUser.uid == uid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text('You cannot change your own role.'),
+            ],
+          ),
+          backgroundColor: _AppColors.errorRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    // ── Proceed with role update ────────────────────────────────────────────
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -113,7 +136,14 @@ class _UserCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Role updated to $newRole'),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline,
+                    color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text('Role updated to $newRole'),
+              ],
+            ),
             backgroundColor: _AppColors.deepBlue,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -136,10 +166,12 @@ class _UserCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final email   = data['email'] ?? 'Unknown';
-    final role    = data['role'] ?? 'staff';
-    final initials = email.isNotEmpty ? email[0].toUpperCase() : '?';
-    final isAdmin = role == 'admin';
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final email       = data['email'] ?? 'Unknown';
+    final role        = data['role'] ?? 'staff';
+    final initials    = email.isNotEmpty ? email[0].toUpperCase() : '?';
+    final isAdmin     = role == 'admin';
+    final isCurrentUser = currentUser?.uid == uid;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -164,7 +196,7 @@ class _UserCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            // Avatar
+            // ── Avatar ───────────────────────────────────────────────────────
             Container(
               width: 42,
               height: 42,
@@ -185,30 +217,59 @@ class _UserCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: isAdmin ? _AppColors.deepBlue : _AppColors.deepOrange,
+                    color: isAdmin
+                        ? _AppColors.deepBlue
+                        : _AppColors.deepOrange,
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
 
-            // Email + current role
+            // ── Email + role badge ────────────────────────────────────────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    email,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _AppColors.deepBlue,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          email,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _AppColors.deepBlue,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // ── "You" badge for current user ──────────────────────
+                      if (isCurrentUser) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: _AppColors.deepBlue.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'You',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _AppColors.deepBlue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: isAdmin
                           ? _AppColors.deepBlue.withOpacity(0.10)
@@ -220,7 +281,9 @@ class _UserCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: isAdmin ? _AppColors.deepBlue : _AppColors.deepOrange,
+                        color: isAdmin
+                            ? _AppColors.deepBlue
+                            : _AppColors.deepOrange,
                       ),
                     ),
                   ),
@@ -228,26 +291,34 @@ class _UserCard extends StatelessWidget {
               ),
             ),
 
-            // Role toggle dropdown
-            DropdownButton<String>(
-              value: role,
-              underline: const SizedBox(),
-              icon: Icon(Icons.expand_more, color: _AppColors.deepBlue, size: 18),
-              style: const TextStyle(
-                fontSize: 13,
-                color: _AppColors.deepBlue,
-                fontWeight: FontWeight.w500,
-              ),
-              items: const [
-                DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                DropdownMenuItem(value: 'staff', child: Text('Staff')),
-              ],
-              onChanged: (newRole) {
-                if (newRole != null && newRole != role) {
-                  _changeRole(context, newRole);
-                }
-              },
-            ),
+            // ── Role dropdown (disabled for current user) ─────────────────
+            isCurrentUser
+                ? Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(Icons.lock_outline,
+                        size: 18,
+                        color: _AppColors.deepBlue.withOpacity(0.40)),
+                  )
+                : DropdownButton<String>(
+                    value: role,
+                    underline: const SizedBox(),
+                    icon: Icon(Icons.expand_more,
+                        color: _AppColors.deepBlue, size: 18),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: _AppColors.deepBlue,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                      DropdownMenuItem(value: 'staff', child: Text('Staff')),
+                    ],
+                    onChanged: (newRole) {
+                      if (newRole != null && newRole != role) {
+                        _changeRole(context, newRole);
+                      }
+                    },
+                  ),
           ],
         ),
       ),
